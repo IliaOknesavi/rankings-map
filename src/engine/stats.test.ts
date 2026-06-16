@@ -19,6 +19,10 @@ describe('stats', () => {
     expect(quantile([10, 20, 30], 0)).toBe(10)
     expect(quantile([10, 20, 30], 1)).toBe(30)
   })
+  it('quantile / median on a single value (no NaN)', () => {
+    expect(quantile([5], 0.5)).toBe(5)
+    expect(median([7])).toBe(7)
+  })
   it('min / max / total / count', () => {
     expect(min([3, 1, 2])).toBe(1)
     expect(max([3, 1, 2])).toBe(3)

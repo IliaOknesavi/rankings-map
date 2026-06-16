@@ -7,6 +7,8 @@ import { present } from './stats'
 type Val = number | Column
 const isCol = (x: Val): x is Column => Array.isArray(x)
 const cell = (v: number): number | null => (Number.isFinite(v) ? v : null)
+// own-property check: prevents inherited names (__proto__, toString, constructor) from resolving
+const has = (o: object, k: string): boolean => Object.prototype.hasOwnProperty.call(o, k)
 
 const OPS: Record<string, (a: number, b: number) => number> = {
   '+': (a, b) => a + b,
@@ -32,9 +34,11 @@ export function evalNode(node: Node, ctx: EvalContext): Val {
     case 'num':
       return node.v
     case 'id': {
-      if (node.v in CONSTS) return CONSTS[node.v]
+      if (has(CONSTS, node.v)) return CONSTS[node.v]
+      if (!has(ctx.columns, node.v)) throw new EngineError(`Неизвестная переменная: ${node.v}`, node.pos)
       const col = ctx.columns[node.v]
-      if (!col) throw new EngineError(`Неизвестная переменная: ${node.v}`, node.pos)
+      if (col.length !== ctx.entityCount)
+        throw new EngineError(`Колонка '${node.v}': длина ${col.length}, ожидалось ${ctx.entityCount}`, node.pos)
       return col
     }
     case 'unary': {
@@ -55,16 +59,16 @@ export function evalNode(node: Node, ctx: EvalContext): Val {
     }
     case 'call': {
       const argv = node.args.map((a) => evalNode(a, ctx))
-      const r = REDUCERS[node.name]
-      if (r) {
+      if (has(REDUCERS, node.name)) {
+        const r = REDUCERS[node.name]
         if (node.args.length !== r.arity)
           throw new EngineError(`${node.name}: ожидалось аргументов — ${r.arity}`, node.pos)
         const col = isCol(argv[0]) ? argv[0] : [argv[0] as number]
         const extra = argv.slice(1).map((x, k) => toScalar(x, node.args[k + 1].pos))
         return r.fn(present(col), ...extra)
       }
-      const vf = VECFNS[node.name]
-      if (vf) {
+      if (has(VECFNS, node.name)) {
+        const vf = VECFNS[node.name]
         if (node.args.length !== vf.arity)
           throw new EngineError(`${node.name}: ожидалось аргументов — ${vf.arity}`, node.pos)
         const col = isCol(argv[0]) ? argv[0] : (Array(ctx.entityCount).fill(argv[0]) as Column)

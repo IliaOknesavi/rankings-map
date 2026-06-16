@@ -43,7 +43,8 @@ export function quantile(v: number[], p: number): number {
   if (p >= 1) return s[s.length - 1]
   const h = (s.length - 1) * p
   const lo = Math.floor(h)
-  return s[lo] + (h - lo) * (s[lo + 1] - s[lo])
+  const hi = Math.min(lo + 1, s.length - 1)
+  return s[lo] + (h - lo) * (s[hi] - s[lo])
 }
 
 export function median(v: number[]): number {

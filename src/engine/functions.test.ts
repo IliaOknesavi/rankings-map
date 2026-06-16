@@ -19,6 +19,10 @@ describe('vec functions', () => {
   it('winsorize clamps tails to [p, 1-p] quantiles', () => {
     expect(VECFNS.winsorize.fn([1, 2, 3, 4, 5, 100], 0.2)).toEqual([2, 2, 3, 4, 5, 5])
   })
+  it('winsorize does not invert bounds when p >= 0.5', () => {
+    const out = VECFNS.winsorize.fn([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 0.6) as number[]
+    expect(new Set(out).size).toBeGreaterThan(1) // not collapsed to a constant
+  })
   it('invert reflects around midrange', () => {
     expect(VECFNS.invert.fn([1, 2, 3])).toEqual([3, 2, 1])
   })

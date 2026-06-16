@@ -48,9 +48,11 @@ export function evaluate(formula: string, ctx: EvalContext, opts?: EvalOptions):
   }
 
   const n = ctx.entityCount
-  const values: Column = Array.isArray(raw)
-    ? raw.map((v) => (v != null && Number.isFinite(v) ? v : null))
-    : Array(n).fill(Number.isFinite(raw) ? raw : null)
+  // always emit exactly n cells (scalar broadcast to N; arrays are length n via column validation)
+  const values: Column = Array.from({ length: n }, (_, i) => {
+    const v = Array.isArray(raw) ? raw[i] : raw
+    return v != null && Number.isFinite(v) ? v : null
+  })
 
   const p = present(values)
   const m = mean(p)

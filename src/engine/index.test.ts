@@ -51,4 +51,19 @@ describe('public api', () => {
   it('listFunctions includes percentile_rank', () => {
     expect(listFunctions().some((d) => d.name === 'percentile_rank')).toBe(true)
   })
+  it('rejects prototype-chain identifiers (no leak)', () => {
+    expect(evaluate('__proto__', ctx).ok).toBe(false)
+    expect(evaluate('toString', ctx).ok).toBe(false)
+    expect(evaluate('constructor + a', ctx).error?.message).toContain('Неизвестная переменная')
+    expect(evaluate('toString(a)', ctx).error?.message).toContain('Неизвестная функция')
+  })
+  it('errors on mismatched ctx column length', () => {
+    const r = evaluate('y', { columns: { y: [5, 6] }, entityCount: 3 })
+    expect(r.ok).toBe(false)
+    expect(r.error?.message).toContain('длина')
+  })
+  it('values always has length entityCount', () => {
+    expect(evaluate('a', ctx).values).toHaveLength(3)
+    expect(evaluate('mean(a)', ctx).values).toHaveLength(3)
+  })
 })

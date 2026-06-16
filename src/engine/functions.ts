@@ -56,8 +56,10 @@ export const VECFNS: Record<string, VecDef> = {
     arity: 2,
     fn: (c, p) => {
       const v = present(c)
-      const lo = quantile(v, p)
-      const hi = quantile(v, 1 - p)
+      const a = quantile(v, p)
+      const b = quantile(v, 1 - p)
+      const lo = Math.min(a, b) // guard against p>=0.5 inverting the bounds
+      const hi = Math.max(a, b)
       return c.map((x) => (x == null ? null : Math.min(Math.max(x, lo), hi)))
     },
   },
