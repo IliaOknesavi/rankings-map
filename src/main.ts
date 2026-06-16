@@ -2,7 +2,8 @@ import { geoNaturalEarth1, geoPath } from 'd3-geo'
 import { scaleSequential } from 'd3-scale'
 import { interpolateViridis } from 'd3-scale-chromatic'
 import { feature } from 'topojson-client'
-import type { Dataset, FormulaRequest, FormulaResponse, IndexMeta, NormMode } from './types'
+import type { Dataset, IndexMeta } from './types'
+import type { EvalContext, EvalResult } from './engine/types'
 
 const W = 960
 const H = 500
@@ -14,7 +15,6 @@ const svg = document.getElementById('map') as unknown as SVGSVGElement
 const indexSelect = document.getElementById('indexSelect') as HTMLSelectElement
 const yearSlider = document.getElementById('yearSlider') as HTMLInputElement
 const yearLabel = document.getElementById('yearLabel') as HTMLElement
-const normSelect = document.getElementById('normSelect') as HTMLSelectElement
 const formulaInput = document.getElementById('formulaInput') as HTMLTextAreaElement
 const applyBtn = document.getElementById('applyFormula') as HTMLButtonElement
 const clearBtn = document.getElementById('clearFormula') as HTMLButtonElement
@@ -27,9 +27,10 @@ const tooltip = document.getElementById('tooltip') as HTMLElement
 
 // ---- formula worker ----
 const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })
-function runFormula(req: FormulaRequest): Promise<FormulaResponse> {
+type FormulaReq = { formula: string } & EvalContext
+function runFormula(req: FormulaReq): Promise<EvalResult> {
   return new Promise((resolve) => {
-    worker.onmessage = (e: MessageEvent<FormulaResponse>) => resolve(e.data)
+    worker.onmessage = (e: MessageEvent<EvalResult>) => resolve(e.data)
     worker.postMessage(req)
   })
 }
@@ -92,9 +93,6 @@ function buildControls() {
     } else {
       update()
     }
-  })
-  normSelect.addEventListener('change', () => {
-    if (mode.kind === 'formula') void applyFormula()
   })
   applyBtn.addEventListener('click', () => void applyFormula())
   clearBtn.addEventListener('click', () => {
@@ -199,24 +197,20 @@ async function applyFormula() {
     formulaError.textContent = 'Введите формулу'
     return
   }
+  // allow optional "Name = expression" — evaluate the right-hand side
+  const formula = raw.replace(/^\s*[A-Za-z_]\w*\s*=(?!=)\s*/, '')
   const yi = currentYearIndex()
-  const normMode = normSelect.value as NormMode
   const columns: Record<string, (number | null)[]> = {}
   for (const idx of data.indices) {
     const s = data.series[idx.id]
     columns[idx.id] = data.entities.map((e) => s[e.id]?.[yi] ?? null)
   }
-  const res = await runFormula({
-    formula: raw,
-    normMode,
-    entityIds: data.entities.map((e) => e.id),
-    columns,
-  })
-  if (res.error) {
-    formulaError.textContent = res.error
+  const res = await runFormula({ formula, columns, entityCount: data.entities.length })
+  if (!res.ok || !res.values) {
+    formulaError.textContent = res.error?.message ?? 'Ошибка вычисления'
     return
   }
-  formulaValues = res.values ?? null
+  formulaValues = res.values
   mode = { kind: 'formula', label: raw, higherBetter: true }
   update()
 }

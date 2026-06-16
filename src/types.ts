@@ -29,16 +29,4 @@ export interface Dataset {
   geoIdToEntity: Record<string, string>
 }
 
-export type NormMode = 'none' | 'zscore' | 'minmax'
-
-export interface FormulaRequest {
-  formula: string
-  normMode: NormMode
-  entityIds: string[]
-  columns: Record<string, (number | null)[]>
-}
-
-export interface FormulaResponse {
-  values?: (number | null)[]
-  error?: string
-}
+// Formula evaluation types now live in src/engine (EvalContext / EvalResult).

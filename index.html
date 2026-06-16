@@ -24,17 +24,11 @@
 
       <details class="formula" open>
         <summary>Свой индекс (формула)</summary>
-        <p class="hint">Переменные: <code id="varList"></code>. Пример:
-          <code>life_exp * 0.1 + gdp_pc</code></p>
-        <label class="field">
-          <span>Нормализация входов</span>
-          <select id="normSelect">
-            <option value="none">нет (сырые значения)</option>
-            <option value="zscore" selected>z-score</option>
-            <option value="minmax">min-max (0..1)</option>
-          </select>
-        </label>
-        <textarea id="formulaInput" rows="2" placeholder="New = idx1 * 0.1 + idx2^2"></textarea>
+        <p class="hint">Переменные: <code id="varList"></code>.<br>
+          Функции: <code>zscore</code>, <code>minmax</code>, <code>percentile_rank</code>,
+          <code>quantile</code>, <code>rank</code>, <code>log</code>, <code>clamp</code>.<br>
+          Пример: <code>zscore(life_exp) * minmax(gdp_pc)</code></p>
+        <textarea id="formulaInput" rows="2" placeholder="zscore(life_exp) * minmax(gdp_pc)"></textarea>
         <div class="row">
           <button id="applyFormula">Построить</button>
           <button id="clearFormula" class="ghost">Сбросить к индексу</button>
