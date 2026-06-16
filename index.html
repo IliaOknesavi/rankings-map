@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rankings Map — компилятор рейтингов на карте</title>
+  <script type="module" crossorigin src="./assets/index-C2axtbQj.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-KkdEKDi4.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="panel">
+      <h1>Rankings&nbsp;Map</h1>
+      <p class="tagline">Международные индексы на карте + свой индекс формулой</p>
+
+      <label class="field">
+        <span>Индекс</span>
+        <select id="indexSelect"></select>
+      </label>
+
+      <label class="field">
+        <span>Год: <b id="yearLabel">—</b></span>
+        <input id="yearSlider" type="range" min="0" max="0" step="1" value="0" />
+      </label>
+
+      <details class="formula" open>
+        <summary>Свой индекс (формула)</summary>
+        <p class="hint">Переменные: <code id="varList"></code>. Пример:
+          <code>life_exp * 0.1 + gdp_pc</code></p>
+        <label class="field">
+          <span>Нормализация входов</span>
+          <select id="normSelect">
+            <option value="none">нет (сырые значения)</option>
+            <option value="zscore" selected>z-score</option>
+            <option value="minmax">min-max (0..1)</option>
+          </select>
+        </label>
+        <textarea id="formulaInput" rows="2" placeholder="New = idx1 * 0.1 + idx2^2"></textarea>
+        <div class="row">
+          <button id="applyFormula">Построить</button>
+          <button id="clearFormula" class="ghost">Сбросить к индексу</button>
+        </div>
+        <div id="formulaError" class="error"></div>
+      </details>
+
+      <div id="legend"></div>
+      <div id="status" class="status"></div>
+      <p class="src" id="sourceNote"></p>
+    </aside>
+
+    <main id="stage">
+      <svg id="map" preserveAspectRatio="xMidYMid meet"></svg>
+    </main>
+    <div id="tooltip" hidden></div>
+  </div>
+</body>
+</html>
