@@ -1,24 +1,59 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Rankings Map — компилятор рейтингов на карте</title>
+  <title>Rankings Atlas — индексы стран на карте</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body>
   <div id="app">
-    <aside id="panel">
-      <h1>Rankings&nbsp;Map</h1>
-      <p class="tagline">Международные индексы на карте + свой индекс формулой</p>
+    <header id="topbar">
+      <div class="brand">
+        <span class="mark">Rankings</span><span class="mark2">Atlas</span>
+      </div>
+      <div class="top-actions">
+        <button id="shareBtn" class="btn-ghost" title="Скопировать ссылку на этот вид">Поделиться</button>
+        <button id="themeBtn" class="btn-ghost icon" aria-label="Переключить тему">◐</button>
+      </div>
+    </header>
+
+    <aside id="rail">
+      <div class="seg" id="modeSeg" role="tablist">
+        <button data-mode="index" class="on" role="tab">Индекс</button>
+        <button data-mode="formula" role="tab">Конструктор</button>
+      </div>
+
+      <section id="panel-index" class="panel">
+        <label class="field">
+          <span>Готовый индекс</span>
+          <select id="indexSelect"></select>
+        </label>
+      </section>
+
+      <section id="panel-formula" class="panel" hidden>
+        <div class="sub">Пресеты</div>
+        <div class="presets" id="presets"></div>
+
+        <div class="sub">Свой индекс — слагаемые</div>
+        <div class="builder" id="builder"></div>
+        <button id="addRow" class="btn-ghost small">+ добавить слагаемое</button>
+
+        <details class="raw">
+          <summary>Сырая формула</summary>
+          <textarea id="formulaInput" rows="2" spellcheck="false" placeholder="zscore(life_exp) * minmax(gdp_pc)"></textarea>
+          <div class="row"><button id="applyFormula">Построить</button></div>
+          <p class="hint">Функции: <code>zscore</code> <code>minmax</code> <code>percentile_rank</code>
+            <code>quantile</code> <code>rank</code> <code>winsorize</code> <code>log</code> <code>clamp</code></p>
+        </details>
+        <div id="formulaError" class="error"></div>
+      </section>
 
       <label class="field">
-        <span>Индекс</span>
-        <select id="indexSelect"></select>
-      </label>
-
-      <label class="field">
-        <span>Год: <b id="yearLabel">—</b></span>
+        <span>Год · <b id="yearLabel">—</b></span>
         <input id="yearSlider" type="range" min="0" max="0" step="1" value="0" />
       </label>
 
@@ -36,29 +71,21 @@
         </label>
       </div>
 
-      <details class="formula" open>
-        <summary>Свой индекс (формула)</summary>
-        <p class="hint">Переменные: <code id="varList"></code>.<br>
-          Функции: <code>zscore</code>, <code>minmax</code>, <code>percentile_rank</code>,
-          <code>quantile</code>, <code>rank</code>, <code>log</code>, <code>clamp</code>.<br>
-          Пример: <code>zscore(life_exp) * minmax(gdp_pc)</code></p>
-        <textarea id="formulaInput" rows="2" placeholder="zscore(life_exp) * minmax(gdp_pc)"></textarea>
-        <div class="row">
-          <button id="applyFormula">Построить</button>
-          <button id="clearFormula" class="ghost">Сбросить к индексу</button>
-        </div>
-        <div id="formulaError" class="error"></div>
-      </details>
+      <div class="field search">
+        <span>Поиск страны</span>
+        <input id="search" type="text" placeholder="например, Germany" autocomplete="off" />
+        <div id="searchResults" class="results" hidden></div>
+      </div>
 
       <div id="legend"></div>
-      <div id="status" class="status"></div>
       <p class="src" id="sourceNote"></p>
+      <p class="status" id="status"></p>
     </aside>
 
     <main id="stage">
-      <svg id="map" preserveAspectRatio="xMidYMid meet"></svg>
+      <svg id="map" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Карта мира с раскраской по индексу"></svg>
+      <div id="tooltip" hidden></div>
     </main>
-    <div id="tooltip" hidden></div>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>

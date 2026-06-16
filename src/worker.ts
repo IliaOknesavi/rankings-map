@@ -2,12 +2,12 @@
 import { evaluate } from './engine'
 import type { EvalContext, EvalResult } from './engine/types'
 
-// Thin transport over the formula engine. The engine is pure, null-aware, and
-// safe-by-construction (no eval / new Function, only known columns + functions).
-type Req = { formula: string } & EvalContext
+// Thin transport over the pure formula engine. Each request carries a seq so the
+// main thread can match replies and ignore superseded ones (live slider drags).
+type Req = { seq: number; formula: string } & EvalContext
 
 self.onmessage = (e: MessageEvent<Req>) => {
-  const { formula, columns, entityCount } = e.data
+  const { seq, formula, columns, entityCount } = e.data
   const res: EvalResult = evaluate(formula, { columns, entityCount })
-  ;(self as DedicatedWorkerGlobalScope).postMessage(res)
+  ;(self as DedicatedWorkerGlobalScope).postMessage({ seq, res })
 }
