@@ -1,5 +1,7 @@
 node_modules/
 dist/
-public/data/
 *.local
 .DS_Store
+
+# public/data/ is committed: it's the static input the site builds from.
+# Refresh it with `npm run etl`, then commit the result.
