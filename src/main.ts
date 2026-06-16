@@ -100,6 +100,8 @@ async function boot() {
     theme: 'dark',
   }
   Object.assign(state, decodeState(location.hash, fallback))
+  // reconcile shared state against the actual dataset (a stale/bogus id must not crash render)
+  if (!data.indices.some((i) => i.id === state.index)) state.index = data.indices[0].id
 
   buildStaticControls()
   applyTheme()
@@ -129,6 +131,7 @@ function buildStaticControls() {
   yearSlider.min = '0'
   yearSlider.max = String(data.years.length - 1)
   yearSlider.value = String(Math.max(0, data.years.indexOf(state.year)))
+  state.year = data.years[Number(yearSlider.value)] // reconcile a bogus/out-of-range year from the URL
 
   binMethodSel.value = state.binMethod
   classCountInput.value = String(state.classes)
@@ -147,6 +150,13 @@ function buildStaticControls() {
   modeSeg.querySelectorAll('button').forEach((b) =>
     b.addEventListener('click', () => setMode((b as HTMLElement).dataset.mode as AppState['mode'], true)),
   )
+  modeSeg.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      setMode(state.mode === 'index' ? 'formula' : 'index', true)
+      ;(modeSeg.querySelector('button.on') as HTMLElement | null)?.focus()
+      e.preventDefault()
+    }
+  })
   indexSelect.addEventListener('change', () => {
     state.index = indexSelect.value
     render()
@@ -186,9 +196,11 @@ function buildStaticControls() {
 
 function setMode(mode: AppState['mode'], user: boolean) {
   state.mode = mode
-  modeSeg.querySelectorAll('button').forEach((b) =>
-    b.classList.toggle('on', (b as HTMLElement).dataset.mode === mode),
-  )
+  modeSeg.querySelectorAll('button').forEach((b) => {
+    const on = (b as HTMLElement).dataset.mode === mode
+    b.classList.toggle('on', on)
+    b.setAttribute('aria-pressed', String(on))
+  })
   panelIndex.hidden = mode !== 'index'
   panelFormula.hidden = mode !== 'formula'
   if (mode === 'formula') {
@@ -214,7 +226,7 @@ function renderBuilder() {
     const el = document.createElement('div')
     el.className = 'brow'
     const idxOpts = data.indices
-      .map((idx) => `<option value="${idx.id}"${idx.id === row.index ? ' selected' : ''}>${idx.label}</option>`)
+      .map((idx) => `<option value="${esc(idx.id)}"${idx.id === row.index ? ' selected' : ''}>${esc(idx.label)}</option>`)
       .join('')
     const normOpts = (
       [
@@ -291,6 +303,9 @@ async function applyFormulaText(raw: string, sync: boolean): Promise<void> {
     formulaError.textContent = 'Введите формулу'
     return
   }
+  // record intent synchronously so a concurrent year-drag re-evaluates THIS formula, not the old one
+  state.mode = 'formula'
+  state.formula = raw
   const formula = trimmed.replace(/^\s*[A-Za-z_]\w*\s*=(?!=)\s*/, '')
   const { seq, res } = await runFormula(formula)
   if (seq !== evalSeq) return // superseded by a newer eval
@@ -300,13 +315,12 @@ async function applyFormulaText(raw: string, sync: boolean): Promise<void> {
   }
   formulaValues = res.values
   formulaCentered = !!res.meta?.centered
-  state.mode = 'formula'
-  state.formula = raw
   render()
   if (sync) syncUrl()
 }
 
 async function recomputeForYear(): Promise<void> {
+  formulaError.textContent = ''
   const { seq, res } = await runFormula(state.formula.replace(/^\s*[A-Za-z_]\w*\s*=(?!=)\s*/, ''))
   if (seq !== evalSeq) return
   if (res.ok && res.values) {
@@ -455,8 +469,9 @@ function showTooltip(ev: MouseEvent, entry: PathEntry) {
     .join(' · ')
   tooltip.hidden = false
   tooltip.innerHTML = `<div class="tt-name">${esc(ent.name)}</div>${body}` + (parts ? `<div class="tt-parts">${esc(parts)}</div>` : '')
+  const th = tooltip.offsetHeight
   tooltip.style.left = Math.min(ev.clientX + 14, window.innerWidth - 250) + 'px'
-  tooltip.style.top = ev.clientY + 14 + 'px'
+  tooltip.style.top = Math.min(ev.clientY + 14, window.innerHeight - th - 8) + 'px'
 }
 function hideTooltip() {
   tooltip.hidden = true
@@ -540,7 +555,10 @@ async function share() {
       shareBtn.classList.remove('ok')
     }, 1600)
   } catch {
-    shareBtn.textContent = url
+    shareBtn.textContent = 'Не удалось'
+    setTimeout(() => {
+      shareBtn.textContent = 'Поделиться'
+    }, 1600)
   }
 }
 
