@@ -47,7 +47,7 @@ let paths: PathEntry[] = []
 // active view: either a base index, or a computed formula vector
 type Mode =
   | { kind: 'index'; index: IndexMeta }
-  | { kind: 'formula'; label: string; higherBetter: boolean; centered: boolean }
+  | { kind: 'formula'; label: string; formula: string; higherBetter: boolean; centered: boolean }
 let mode: Mode = { kind: 'index', index: {} as IndexMeta }
 let binMethod: BinMethod = 'quantile'
 let classes = 5
@@ -90,12 +90,9 @@ function buildControls() {
     update()
   })
   yearSlider.addEventListener('input', () => {
-    if (mode.kind === 'formula') {
-      // recompute formula for the new year
-      void applyFormula()
-    } else {
-      update()
-    }
+    // re-evaluate the ALREADY-APPLIED formula for the new year (not the live textarea)
+    if (mode.kind === 'formula') void recomputeFormulaForYear()
+    else update()
   })
   applyBtn.addEventListener('click', () => void applyFormula())
   clearBtn.addEventListener('click', () => {
@@ -113,8 +110,9 @@ function buildControls() {
     binMethod = binMethodSel.value as BinMethod
     update()
   })
-  classCountInput.addEventListener('input', () => {
+  classCountInput.addEventListener('change', () => {
     classes = Math.max(3, Math.min(9, Number(classCountInput.value) || 5))
+    classCountInput.value = String(classes) // reflect the clamped value back to the field
     update()
   })
 }
@@ -160,8 +158,12 @@ function update() {
   const scheme: 'sequential' | 'diverging' = mode.kind === 'formula' && mode.centered ? 'diverging' : 'sequential'
 
   const bins = computeBins(values, binMethod, classes)
-  let colors = colorsFor(classes, scheme)
-  if (!higherBetter) colors = colors.slice().reverse() // lower-is-better: low values get the "good" end
+  // colors length === bins.k (effective classes after dedupe), so legend and map always agree
+  let colors: string[] = []
+  if (bins) {
+    colors = colorsFor(bins.k, scheme).slice(0, bins.k)
+    if (!higherBetter) colors = colors.reverse() // lower-is-better: low values get the "good" end
+  }
 
   for (const p of paths) {
     let v: number | null = null
@@ -195,6 +197,12 @@ function drawLegend(bins: Bins | null, colors: string[]) {
       <div class="legend-nodata"><span class="swatch"></span> нет данных</div>`
     return
   }
+  if (bins.min === bins.max) {
+    legend.innerHTML = `<div class="legend-title">${title}</div>
+      <div class="legend-steps"><div class="legend-step"><span class="sw" style="background:${colors[0]}"></span><span class="rng">все = ${fmt(bins.min)}</span></div></div>
+      <div class="legend-nodata"><span class="swatch"></span> нет данных</div>`
+    return
+  }
   const edges = [bins.min, ...bins.breaks, bins.max] // k+1 ascending edges
   const steps = colors
     .map(
@@ -208,6 +216,18 @@ function drawLegend(bins: Bins | null, colors: string[]) {
     <div class="legend-nodata"><span class="swatch"></span> нет данных</div>`
 }
 
+// evaluate a (already-stripped) formula against the current year's columns
+function computeFormula(formula: string): Promise<EvalResult> {
+  const yi = currentYearIndex()
+  const columns: Record<string, (number | null)[]> = {}
+  for (const idx of data.indices) {
+    const s = data.series[idx.id]
+    columns[idx.id] = data.entities.map((e) => s[e.id]?.[yi] ?? null)
+  }
+  return runFormula({ formula, columns, entityCount: data.entities.length })
+}
+
+// "Построить": read + strip the textarea, evaluate, switch to formula mode
 async function applyFormula() {
   const raw = formulaInput.value.trim()
   formulaError.textContent = ''
@@ -217,20 +237,25 @@ async function applyFormula() {
   }
   // allow optional "Name = expression" — evaluate the right-hand side
   const formula = raw.replace(/^\s*[A-Za-z_]\w*\s*=(?!=)\s*/, '')
-  const yi = currentYearIndex()
-  const columns: Record<string, (number | null)[]> = {}
-  for (const idx of data.indices) {
-    const s = data.series[idx.id]
-    columns[idx.id] = data.entities.map((e) => s[e.id]?.[yi] ?? null)
-  }
-  const res = await runFormula({ formula, columns, entityCount: data.entities.length })
+  const res = await computeFormula(formula)
   if (!res.ok || !res.values) {
     formulaError.textContent = res.error?.message ?? 'Ошибка вычисления'
     return
   }
   formulaValues = res.values
-  mode = { kind: 'formula', label: raw, higherBetter: true, centered: !!res.meta?.centered }
+  mode = { kind: 'formula', label: raw, formula, higherBetter: true, centered: !!res.meta?.centered }
   update()
+}
+
+// year-slider in formula mode: re-run the APPLIED formula (ignores unbuilt textarea edits)
+async function recomputeFormulaForYear() {
+  if (mode.kind !== 'formula') return
+  const res = await computeFormula(mode.formula)
+  if (res.ok && res.values) {
+    formulaValues = res.values
+    mode = { ...mode, centered: !!res.meta?.centered }
+  }
+  update() // always refresh year label + map, even if a year has no data for the formula
 }
 
 function showTooltip(ev: MouseEvent, entry: PathEntry) {

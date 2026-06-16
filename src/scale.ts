@@ -18,14 +18,17 @@ export function computeBins(values: (number | null)[], method: BinMethod, k: num
   if (v.length < 2) return null
   const min = Math.min(...v)
   const max = Math.max(...v)
-  const breaks: number[] = []
+  if (min === max) return { breaks: [], min, max, k: 1 } // constant column -> single class
+  const raw: number[] = []
   if (method === 'equal') {
     const step = (max - min) / k
-    for (let i = 1; i < k; i++) breaks.push(min + i * step)
+    for (let i = 1; i < k; i++) raw.push(min + i * step)
   } else {
-    for (let i = 1; i < k; i++) breaks.push(quantile(v, i / k))
+    for (let i = 1; i < k; i++) raw.push(quantile(v, i / k))
   }
-  return { breaks, min, max, k }
+  // keep strictly-interior, unique breaks so every class is real (no phantom/duplicate legend steps)
+  const breaks = raw.filter((b, i) => b > min && b < max && (i === 0 || b !== raw[i - 1]))
+  return { breaks, min, max, k: breaks.length + 1 }
 }
 
 /** Class index 0..k-1: the number of breaks strictly below the value. */

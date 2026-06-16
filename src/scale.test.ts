@@ -23,11 +23,19 @@ describe('scale', () => {
     expect(computeBins([null, 5], 'equal', 5)).toBeNull()
     expect(computeBins([null, null], 'quantile', 5)).toBeNull()
   })
-  it('all-equal column -> degenerate breaks, class 0', () => {
+  it('all-equal column -> single class (no phantom breaks)', () => {
     const b = computeBins([5, 5, 5], 'quantile', 5)!
-    expect(b.min).toBe(5)
-    expect(b.max).toBe(5)
+    expect(b.breaks).toEqual([])
+    expect(b.k).toBe(1)
     expect(classOf(5, b.breaks)).toBe(0)
+  })
+  it('dedupes interior breaks on skewed data (no phantom classes)', () => {
+    const b = computeBins([0, 0, 0, 0, 0, 0, 0, 0, 1, 100], 'quantile', 5)!
+    expect(b.breaks).toHaveLength(1) // the three duplicate 0-breaks are dropped
+    expect(b.breaks[0]).toBeCloseTo(0.2)
+    expect(b.k).toBe(2)
+    expect(classOf(0, b.breaks)).toBe(0)
+    expect(classOf(100, b.breaks)).toBe(1)
   })
   it('colorsFor length, clamped to [3,9]', () => {
     expect(colorsFor(5, 'sequential')).toHaveLength(5)
