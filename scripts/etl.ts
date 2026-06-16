@@ -30,12 +30,18 @@ interface IndexDef {
   unit: string
   direction: 'higherBetter' | 'lowerBetter'
   wbCode: string
+  source?: number // World Bank database id (default 2; WGI = 3)
 }
 
 const INDICES: IndexDef[] = [
   { id: 'gdp_pc', label: 'ВВП на душу (тек. US$)', unit: 'US$', direction: 'higherBetter', wbCode: 'NY.GDP.PCAP.CD' },
   { id: 'life_exp', label: 'Ожид. продолжительность жизни', unit: 'лет', direction: 'higherBetter', wbCode: 'SP.DYN.LE00.IN' },
   { id: 'co2_pc', label: 'CO₂ на душу (т)', unit: 'т', direction: 'lowerBetter', wbCode: 'EN.GHG.CO2.PC.CE.AR5' },
+  // corruption: WGI Control of Corruption (higher = better control / less corruption); WGI lives in source 3
+  { id: 'corruption_control', label: 'Контроль коррупции (WGI)', unit: 'индекс −2.5…2.5', direction: 'higherBetter', wbCode: 'GOV_WGI_CC.EST', source: 3 },
+  // capital concentration (income-inequality proxies; true wealth shares aren't on the WB API)
+  { id: 'gini', label: 'Неравенство доходов (Джини)', unit: 'индекс 0–100', direction: 'lowerBetter', wbCode: 'SI.POV.GINI' },
+  { id: 'income_top10', label: 'Доля дохода верхних 10%', unit: '%', direction: 'lowerBetter', wbCode: 'SI.DST.10TH.10' },
 ]
 
 const SOURCE = 'World Bank'
@@ -62,8 +68,9 @@ async function fetchCountries(): Promise<{ id: string; name: string; region: str
     .map((c) => ({ id: c.id as string, name: c.name as string, region: c.region.value as string }))
 }
 
-async function fetchIndicator(code: string): Promise<WBRow[]> {
-  const url = `https://api.worldbank.org/v2/country/all/indicator/${code}?format=json&per_page=20000&date=${Y0}:${Y1}`
+async function fetchIndicator(code: string, source?: number): Promise<WBRow[]> {
+  const src = source ? `&source=${source}` : ''
+  const url = `https://api.worldbank.org/v2/country/all/indicator/${code}?format=json&per_page=20000&date=${Y0}:${Y1}${src}`
   const j = await wbGet(url)
   if (!Array.isArray(j) || j.length < 2 || !Array.isArray(j[1])) throw new Error(`unexpected payload for ${code}`)
   const meta = j[0]
@@ -84,7 +91,7 @@ async function main() {
 
   console.log('2/4 indicators…')
   for (const idx of INDICES) {
-    const rows = await fetchIndicator(idx.wbCode)
+    const rows = await fetchIndicator(idx.wbCode, idx.source)
     const byEntity: Record<string, (number | null)[]> = {}
     for (const e of entities) byEntity[e.id] = new Array(YEARS.length).fill(null)
     let filled = 0

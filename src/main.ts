@@ -135,6 +135,7 @@ function buildStaticControls() {
 
   binMethodSel.value = state.binMethod
   classCountInput.value = String(state.classes)
+  $('varList').textContent = data.indices.map((i) => i.id).join(', ')
 
   for (const p of PRESETS) {
     const b = document.createElement('button')
