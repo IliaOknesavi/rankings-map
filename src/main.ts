@@ -1,9 +1,8 @@
 import { geoNaturalEarth1, geoPath } from 'd3-geo'
-import { scaleSequential } from 'd3-scale'
-import { interpolateViridis } from 'd3-scale-chromatic'
 import { feature } from 'topojson-client'
 import type { Dataset, IndexMeta } from './types'
 import type { EvalContext, EvalResult } from './engine/types'
+import { computeBins, classOf, colorsFor, type BinMethod, type Bins } from './scale'
 
 const W = 960
 const H = 500
@@ -24,6 +23,8 @@ const statusEl = document.getElementById('status') as HTMLElement
 const sourceNote = document.getElementById('sourceNote') as HTMLElement
 const varList = document.getElementById('varList') as HTMLElement
 const tooltip = document.getElementById('tooltip') as HTMLElement
+const binMethodSel = document.getElementById('binMethod') as HTMLSelectElement
+const classCountInput = document.getElementById('classCount') as HTMLInputElement
 
 // ---- formula worker ----
 const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })
@@ -44,10 +45,12 @@ let data: Dataset
 let entityIndexById: Map<string, number>
 let paths: PathEntry[] = []
 // active view: either a base index, or a computed formula vector
-let mode: { kind: 'index'; index: IndexMeta } | { kind: 'formula'; label: string; higherBetter: boolean } = {
-  kind: 'index',
-  index: {} as IndexMeta,
-}
+type Mode =
+  | { kind: 'index'; index: IndexMeta }
+  | { kind: 'formula'; label: string; higherBetter: boolean; centered: boolean }
+let mode: Mode = { kind: 'index', index: {} as IndexMeta }
+let binMethod: BinMethod = 'quantile'
+let classes = 5
 let formulaValues: (number | null)[] | null = null // aligned to data.entities
 
 async function boot() {
@@ -103,6 +106,17 @@ function buildControls() {
     mode = { kind: 'index', index: idx }
     update()
   })
+
+  binMethodSel.value = binMethod
+  classCountInput.value = String(classes)
+  binMethodSel.addEventListener('change', () => {
+    binMethod = binMethodSel.value as BinMethod
+    update()
+  })
+  classCountInput.addEventListener('input', () => {
+    classes = Math.max(3, Math.min(9, Number(classCountInput.value) || 5))
+    update()
+  })
 }
 
 function currentYearIndex(): number {
@@ -142,14 +156,12 @@ function currentVector(): (number | null)[] {
 
 function update() {
   const values = currentVector()
-  const present = values.filter((v): v is number => v != null && Number.isFinite(v))
-  const min = present.length ? Math.min(...present) : 0
-  const max = present.length ? Math.max(...present) : 1
-
   const higherBetter = mode.kind === 'formula' ? mode.higherBetter : mode.index.direction === 'higherBetter'
-  // higher-better -> high maps to bright (viridis 1); lower-better -> invert
-  const domain: [number, number] = higherBetter ? [min, max] : [max, min]
-  const color = scaleSequential(interpolateViridis).domain(domain)
+  const scheme: 'sequential' | 'diverging' = mode.kind === 'formula' && mode.centered ? 'diverging' : 'sequential'
+
+  const bins = computeBins(values, binMethod, classes)
+  let colors = colorsFor(classes, scheme)
+  if (!higherBetter) colors = colors.slice().reverse() // lower-is-better: low values get the "good" end
 
   for (const p of paths) {
     let v: number | null = null
@@ -157,36 +169,42 @@ function update() {
       const ei = entityIndexById.get(p.entityId)
       if (ei != null) v = values[ei]
     }
-    if (v == null || !Number.isFinite(v)) {
+    if (v == null || !Number.isFinite(v) || !bins) {
       p.el.setAttribute('fill', 'var(--no-data)')
     } else {
-      p.el.setAttribute('fill', color(v))
+      p.el.setAttribute('fill', colors[classOf(v, bins.breaks)])
     }
   }
 
   // header / labels
+  yearLabel.textContent = String(data.years[currentYearIndex()])
   if (mode.kind === 'index') {
-    yearLabel.textContent = String(data.years[currentYearIndex()])
     sourceNote.textContent = `Источник: ${mode.index.source} · ${mode.index.license}` +
       (mode.index.direction === 'lowerBetter' ? ' · меньше = лучше' : '')
   } else {
-    yearLabel.textContent = String(data.years[currentYearIndex()])
     sourceNote.textContent = 'Производный индекс (формула)'
   }
-  drawLegend(min, max, higherBetter)
+  drawLegend(bins, colors)
 }
 
-function drawLegend(min: number, max: number, higherBetter: boolean) {
-  const stops: string[] = []
-  const N = 10
-  for (let i = 0; i <= N; i++) stops.push(interpolateViridis(i / N))
-  const grad = higherBetter ? stops : stops.slice().reverse()
-  const css = grad.map((c, i) => `${c} ${(i / N) * 100}%`).join(', ')
+function drawLegend(bins: Bins | null, colors: string[]) {
+  const title = mode.kind === 'index' ? mode.index.label : mode.label
   const fmt = (n: number) => (Math.abs(n) >= 100 ? n.toFixed(0) : n.toFixed(2))
-  legend.innerHTML = `
-    <div class="legend-title">${mode.kind === 'index' ? mode.index.label : mode.label}</div>
-    <div class="legend-bar" style="background: linear-gradient(to right, ${css})"></div>
-    <div class="legend-axis"><span>${fmt(min)}</span><span>${fmt(max)}</span></div>
+  if (!bins) {
+    legend.innerHTML = `<div class="legend-title">${title}</div>
+      <div class="legend-nodata"><span class="swatch"></span> нет данных</div>`
+    return
+  }
+  const edges = [bins.min, ...bins.breaks, bins.max] // k+1 ascending edges
+  const steps = colors
+    .map(
+      (c, i) =>
+        `<div class="legend-step"><span class="sw" style="background:${c}"></span>` +
+        `<span class="rng">${fmt(edges[i])} – ${fmt(edges[i + 1])}</span></div>`,
+    )
+    .join('')
+  legend.innerHTML = `<div class="legend-title">${title}</div>
+    <div class="legend-steps">${steps}</div>
     <div class="legend-nodata"><span class="swatch"></span> нет данных</div>`
 }
 
@@ -211,7 +229,7 @@ async function applyFormula() {
     return
   }
   formulaValues = res.values
-  mode = { kind: 'formula', label: raw, higherBetter: true }
+  mode = { kind: 'formula', label: raw, higherBetter: true, centered: !!res.meta?.centered }
   update()
 }
 

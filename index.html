@@ -22,6 +22,20 @@
         <input id="yearSlider" type="range" min="0" max="0" step="1" value="0" />
       </label>
 
+      <div class="scale-row">
+        <label class="field">
+          <span>Классы</span>
+          <select id="binMethod">
+            <option value="quantile">Квантили</option>
+            <option value="equal">Равные интервалы</option>
+          </select>
+        </label>
+        <label class="field narrow">
+          <span>Кол-во</span>
+          <input id="classCount" type="number" min="3" max="9" value="5" />
+        </label>
+      </div>
+
       <details class="formula" open>
         <summary>Свой индекс (формула)</summary>
         <p class="hint">Переменные: <code id="varList"></code>.<br>
